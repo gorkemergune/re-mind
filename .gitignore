@@ -70,7 +70,6 @@ coverage/
 Thumbs.db
 CLAUDE.md
 roadmap.md
-screenshots/
-img/
+.claude
 .vscode/
 tr
