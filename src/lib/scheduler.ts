@@ -6,62 +6,89 @@ import { getTranslation } from "../i18n";
 import type { Locale } from "../i18n";
 import { sendNativeNotification } from "./notifications";
 import { playNotificationSound } from "./sound";
+import type { Task } from "../types/task";
 
-const CHECK_INTERVAL = 15_000; // 15 seconds
+const CHECK_INTERVAL_MS = 15_000;
+
+// How many minutes before the task to show pre-reminders
+const PRE_REMINDER_OFFSETS_MIN = [60, 30, 15, 5];
+
+// Grace window (minutes) — main notification fires within ±2 minutes of task time
+const MAIN_GRACE_MIN = 2;
+// Pre-reminder window — fires when time-until-task crosses the offset ± 1 minute
+const PRE_GRACE_MIN = 1;
 
 export function useTaskScheduler() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tasks = useTaskStore((s) => s.tasks);
-  const { addReminder, isNotified, markNotified } = useReminderStore();
-  const soundEnabled = useSettingsStore((s) => s.settings.sound_enabled);
+  const { addReminder, addPreReminder, markNotified, isNotified } = useReminderStore();
 
   useEffect(() => {
     const check = () => {
       const now = new Date();
-      const nowDate = formatDate(now);
-      const nowTime = formatTime(now);
+      const settings = useSettingsStore.getState().settings;
+      const locale = settings.language as Locale;
+      const t = getTranslation(locale);
 
       for (const task of tasks) {
         if (task.completed) continue;
-        if (isNotified(task.id)) continue;
 
-        if (isTaskDue(task.date, task.time, nowDate, nowTime)) {
-          markNotified(task.id);
+        const taskMs = taskToMs(task);
+        if (taskMs === null) continue;
+
+        const diffMin = (taskMs - now.getTime()) / 60_000; // positive = future
+
+        // --- Main notification: fires when task time is now (±MAIN_GRACE_MIN) ---
+        if (Math.abs(diffMin) <= MAIN_GRACE_MIN && !isNotified(task.id, "main")) {
+          markNotified(task.id, "main");
           addReminder(task);
-          const locale = useSettingsStore.getState().settings.language as Locale;
-          const t = getTranslation(locale);
-          sendNativeNotification(task.title, task.description || t.notification_scheduledNow);
-          if (useSettingsStore.getState().settings.sound_enabled) {
-            playNotificationSound();
+          sendNativeNotification(
+            `⏰ ${task.title}`,
+            task.description ?? t.notification_scheduledNow
+          );
+          if (settings.sound_enabled) playNotificationSound();
+        }
+
+        // --- Pre-reminders (only for future tasks) ---
+        if (diffMin > 0) {
+          for (const offset of PRE_REMINDER_OFFSETS_MIN) {
+            if (diffMin <= offset + PRE_GRACE_MIN && diffMin > offset - PRE_GRACE_MIN) {
+              const key = `pre:${offset}`;
+              if (!isNotified(task.id, key)) {
+                markNotified(task.id, key);
+                addPreReminder({
+                  id: `${task.id}:${key}`,
+                  taskId: task.id,
+                  taskTitle: task.title,
+                  taskDescription: task.description,
+                  taskTime: task.time,
+                  minutesBefore: offset,
+                });
+                sendNativeNotification(
+                  `🔔 ${task.title}`,
+                  `${t.notification_startsIn} ${offset} ${t.reminder_minutes}`
+                );
+              }
+            }
           }
         }
       }
     };
 
     check();
-    intervalRef.current = setInterval(check, CHECK_INTERVAL);
-
+    intervalRef.current = setInterval(check, CHECK_INTERVAL_MS);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [tasks, addReminder, isNotified, markNotified, soundEnabled]);
+  }, [tasks, addReminder, addPreReminder, markNotified, isNotified]);
 }
 
-function formatDate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function formatTime(d: Date): string {
-  const h = String(d.getHours()).padStart(2, "0");
-  const m = String(d.getMinutes()).padStart(2, "0");
-  return `${h}:${m}`;
-}
-
-function isTaskDue(taskDate: string, taskTime: string, nowDate: string, nowTime: string): boolean {
-  if (taskDate < nowDate) return true;
-  if (taskDate === nowDate && taskTime <= nowTime) return true;
-  return false;
+function taskToMs(task: Task): number | null {
+  try {
+    const dt = new Date(`${task.date}T${task.time}:00`);
+    if (isNaN(dt.getTime())) return null;
+    return dt.getTime();
+  } catch {
+    return null;
+  }
 }

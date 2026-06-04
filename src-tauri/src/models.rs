@@ -35,3 +35,16 @@ pub struct TaskStats {
     pub completed_tasks: i64,
     pub pending_tasks: i64,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FocusHeatmapEntry {
+    pub date: String,
+    pub hour: i64,
+    pub focus_minutes: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WeeklyFocusEntry {
+    pub date: String,
+    pub total_focus_minutes: f64,
+}

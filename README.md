@@ -5,7 +5,7 @@
 <h1 align="center">Re-Minder</h1>
 
 <p align="center">
-  Task scheduler and break reminder for macOS. Native, lightweight, runs in the background.
+  Task scheduler, break reminder, and focus tracker for macOS. Native, lightweight, runs in the background.
 </p>
 
 <p align="center">
@@ -48,17 +48,25 @@ Grab the latest `Reminder.app` from the [Releases](https://github.com/gorkemergu
 
 ## What It Does
 
-**Task Scheduling** -- Create tasks with a title, optional description, date, time, and repeat mode (once, daily, weekdays, weekly). When a task is due, you get a native macOS notification, an in-app popup, and a sound alert.
+**Task Scheduling** -- Create tasks with a title, optional description, date, time, and repeat mode (once, daily, weekdays, weekly). When a task is due you get a native macOS notification, an in-app popup, and a sound alert.
 
-**Break Reminders** -- Every 30 minutes (configurable) the app shows a fullscreen overlay encouraging you to step away, drink water, or stretch. You can take the break or skip it -- either way, the app tracks your response.
+**Pre-Reminder Notifications** -- Before a task's scheduled time the app shows a small, non-intrusive toast card in the top-right corner at configurable offsets: 60, 30, 15, and 5 minutes in advance. Each toast auto-dismisses after 12 seconds and is never shown twice for the same offset.
 
-**Floating Widget** -- A small always-on-top card that shows the current time, your next upcoming task, and the countdown until your next break. Drag it to a second monitor and keep it in view while you work.
+**Break Reminders** -- Every 30 minutes (configurable) the app shows a fullscreen overlay encouraging you to step away, drink water, or stretch. You can take the break, skip it, or snooze it -- the app tracks your response either way. Break timing uses absolute timestamps stored in `localStorage` and is driven by a Rust background thread, so it triggers reliably even when the window is minimised or hidden in the tray.
+
+**Focus Analytics** -- The app silently tracks how long the window is in the foreground, split by date and hour. The Statistics page uses this data to show:
+- Total focus time over the last 28 days
+- A weekly bar chart (last 7 days)
+- A 14-day × 18-hour heatmap with per-cell intensity scaling
+- Automated insights: peak focus hour, average daily focus time, best day of the week, late-night work patterns, and break compliance
+
+**Floating Widget** -- A small always-on-top card showing the current time, your next upcoming task, and the real-time countdown until your next break. Reads the same `localStorage` timestamp as the main window so the countdown stays accurate. Drag it to a second monitor and keep it in view while you work.
 
 **System Tray** -- Closing the window doesn't quit the app. It keeps running in the tray with quick access to open the app, add a task, pause breaks, or quit entirely.
 
-**Statistics** -- A dashboard showing completed vs. dismissed tasks, breaks taken vs. skipped, displayed as visual charts.
+**Statistics** -- A dashboard showing task completion rate, break behaviour, and the full focus analytics described above.
 
-**Settings** -- Break interval (15/30/45/60 min), break duration (1-10 min), notification sound toggle, dark/light mode, widget visibility, and language (English or Turkish with auto-detection).
+**Settings** -- Break interval (1/15/30/45/60 min), break duration (1-10 min), notification sound toggle, dark/light mode, widget visibility, and language (English or Turkish with auto-detection).
 
 ## Build From Source
 
@@ -98,11 +106,12 @@ Frontend changes are hot-reloaded.
 
 All data lives in a local SQLite database. Nothing is sent anywhere.
 
-| Table           | Content                                                                                 |
-| --------------- | --------------------------------------------------------------------------------------- |
-| `tasks`       | Scheduled tasks -- title, description, date, time, repeat mode, completion status       |
-| `break_stats` | Counters -- breaks shown, breaks taken, breaks skipped                                  |
-| `settings`    | User preferences -- break interval, duration, theme, language, sound, widget visibility |
+| Table              | Content                                                                                 |
+| ------------------ | --------------------------------------------------------------------------------------- |
+| `tasks`            | Scheduled tasks -- title, description, date, time, repeat mode, completion status       |
+| `break_stats`      | Counters -- breaks shown, breaks taken, breaks skipped                                  |
+| `settings`         | User preferences -- break interval, duration, theme, language, sound, widget visibility |
+| `focus_sessions`   | Focus time per date and hour -- used for heatmap and productivity insights               |
 
 Database location:
 
@@ -122,20 +131,28 @@ sqlite3 ~/Library/Application\ Support/com.gorkemergune.reminder/reminder.db
 SELECT * FROM tasks;
 SELECT * FROM break_stats;
 SELECT * FROM settings;
+SELECT date, hour, focus_minutes FROM focus_sessions ORDER BY date, hour;
 ```
+
+## Architecture Notes
+
+**Break timer reliability** -- JavaScript `setInterval` is throttled by WKWebView when the window is hidden or the app is in the tray. Re-Minder avoids this by storing the next-break timestamp as an absolute Unix millisecond value in `localStorage` (`reminder_next_break_at`). A Rust background thread emits a `backend-tick` event every 30 seconds; the frontend listener compares `Date.now()` against the stored timestamp regardless of how much JavaScript execution was throttled. The `visibilitychange` event triggers an additional check each time the window comes back to the foreground.
+
+**Notification deduplication** -- Each task notification (main and each pre-reminder offset) is tracked in `localStorage` under `reminder_notified_v2`. Keys survive app restarts so past-due tasks don't re-notify after relaunch.
+
+**Focus tracking** -- The `useFocusTracker` hook uses the Page Visibility API to record when the app window enters and leaves the foreground. Sessions are flushed to the SQLite backend every 60 seconds, split across hour boundaries so the heatmap can show per-hour granularity.
 
 ## Tech Stack
 
 |               |                                                                                                                  |
 | ------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Desktop       | [Tauri v2](https://v2.tauri.app) (Rust)                                                                             |
-| Frontend      | [React 19](https://react.dev), [TypeScript 5.8](https://www.typescriptlang.org) (strict mode)                          |
-| Styling       | [Tailwind CSS v4](https://tailwindcss.com)                                                                          |
-| State         | [Zustand v5](https://zustand.docs.pmnd.rs)                                                                          |
-| Database      | SQLite via[rusqlite](https://github.com/rusqlite/rusqlite) (bundled)                                                |
+| Desktop       | [Tauri v2](https://v2.tauri.app) (Rust)                                                                          |
+| Frontend      | [React 19](https://react.dev), [TypeScript 5.8](https://www.typescriptlang.org) (strict mode)                    |
+| Styling       | [Tailwind CSS v4](https://tailwindcss.com)                                                                       |
+| State         | [Zustand v5](https://zustand.docs.pmnd.rs)                                                                       |
+| Database      | SQLite via [rusqlite](https://github.com/rusqlite/rusqlite) (bundled)                                            |
 | Notifications | [tauri-plugin-notification](https://v2.tauri.app/plugin/notification/), [react-hot-toast](https://react-hot-toast.com) |
-| Animations    | [canvas-confetti](https://github.com/catdad/canvas-confetti)                                                        |
-| Dates         | [date-fns](https://date-fns.org)                                                                                    |
+| Animations    | [canvas-confetti](https://github.com/catdad/canvas-confetti)                                                     |
 
 ## License
 

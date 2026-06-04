@@ -20,9 +20,24 @@ export function WidgetView() {
   const t = getTranslation(locale);
 
   useEffect(() => {
+    const computeCountdown = () => {
+      try {
+        const stored = localStorage.getItem("reminder_next_break_at");
+        if (stored) {
+          const ts = parseInt(stored, 10);
+          if (!isNaN(ts)) {
+            return Math.max(0, Math.round((ts - Date.now()) / 1000));
+          }
+        }
+      } catch {}
+      return 30 * 60;
+    };
+
+    setBreakCountdown(computeCountdown());
+
     const timer = setInterval(() => {
       setTime(new Date());
-      setBreakCountdown((prev) => (prev > 0 ? prev - 1 : 30 * 60));
+      setBreakCountdown(computeCountdown());
     }, 1000);
     return () => clearInterval(timer);
   }, []);

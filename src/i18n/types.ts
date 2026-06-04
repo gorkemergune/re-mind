@@ -125,8 +125,23 @@ export interface TranslationDictionary {
   widget_noUpcoming: string;
   widget_breakIn: string;
 
-  // Scheduler
+  // Scheduler / notifications
   notification_scheduledNow: string;
+  notification_startsIn: string;
+  notification_upcomingTask: string;
+
+  // StatsView analytics
+  stats_focus: string;
+  stats_focusHeatmap: string;
+  stats_totalFocusTime: string;
+  stats_weeklyFocus: string;
+  stats_insights: string;
+  stats_noFocusData: string;
+  stats_hours: string;
+  stats_mins: string;
+  stats_daily: string;
+  stats_weekly: string;
+  stats_heatmapHint: string;
 
   // ConfirmDialog
   confirm_deleteTask: string;

@@ -2,7 +2,7 @@ mod db;
 mod models;
 
 use db::Database;
-use models::{AppSettings, BreakStats, Task, TaskStats};
+use models::{AppSettings, BreakStats, FocusHeatmapEntry, Task, TaskStats, WeeklyFocusEntry};
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::TrayIconBuilder,
@@ -149,6 +149,31 @@ fn close_break_overlay(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn record_focus_time(
+    state: tauri::State<'_, Database>,
+    date: String,
+    hour: i64,
+    minutes: f64,
+) -> Result<(), String> {
+    state.record_focus_time(&date, hour, minutes)
+}
+
+#[tauri::command]
+fn get_focus_heatmap(
+    state: tauri::State<'_, Database>,
+    days: i64,
+) -> Result<Vec<FocusHeatmapEntry>, String> {
+    state.get_focus_heatmap(days)
+}
+
+#[tauri::command]
+fn get_weekly_focus(
+    state: tauri::State<'_, Database>,
+) -> Result<Vec<WeeklyFocusEntry>, String> {
+    state.get_weekly_focus()
+}
+
 fn show_main_window(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
@@ -199,6 +224,16 @@ pub fn run() {
                 .default_window_icon()
                 .cloned()
                 .expect("failed to get default window icon");
+
+            // Background heartbeat — fires every 30 seconds regardless of WebKit throttling.
+            // The frontend listens to "backend-tick" to check if a break is due.
+            let tick_handle = app.handle().clone();
+            std::thread::spawn(move || {
+                loop {
+                    std::thread::sleep(std::time::Duration::from_secs(30));
+                    let _ = tick_handle.emit("backend-tick", ());
+                }
+            });
 
             let _tray = TrayIconBuilder::new()
                 .icon(icon)
@@ -265,6 +300,9 @@ pub fn run() {
             toggle_widget,
             show_break_overlay,
             close_break_overlay,
+            record_focus_time,
+            get_focus_heatmap,
+            get_weekly_focus,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

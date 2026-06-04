@@ -12,3 +12,14 @@ export interface TaskStats {
   completed_tasks: number;
   pending_tasks: number;
 }
+
+export interface FocusHeatmapEntry {
+  date: string;
+  hour: number;
+  focus_minutes: number;
+}
+
+export interface WeeklyFocusEntry {
+  date: string;
+  total_focus_minutes: number;
+}

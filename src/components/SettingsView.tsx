@@ -17,7 +17,7 @@ export function SettingsView({ onViewChange }: SettingsViewProps) {
 
   const handleIntervalChange = (val: number) => {
     updateSettings({ break_interval: val });
-    breakStore.setSecondsUntilBreak(val * 60);
+    breakStore.setIntervalMin(val);
   };
 
   const handleDarkMode = (val: boolean) => {

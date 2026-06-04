@@ -17,6 +17,8 @@ import { I18nProvider } from "./i18n";
 import type { Locale } from "./i18n";
 import { useTaskScheduler } from "./lib/scheduler";
 import { useBreakTimer } from "./lib/breakTimer";
+import { useFocusTracker } from "./lib/focusTracker";
+import { PreReminderToast } from "./components/PreReminderToast";
 
 function isWidgetMode(): boolean {
   return window.location.hash === "#widget";
@@ -65,15 +67,12 @@ function MainApp() {
     }
   }, [loaded, settings.dark_mode]);
 
-  // Sync break interval to break store
+  // Sync break interval to break store when settings load
   useEffect(() => {
     if (loaded) {
       const breakState = useBreakStore.getState();
       if (breakState.intervalMin !== settings.break_interval) {
-        useBreakStore.setState({
-          intervalMin: settings.break_interval,
-          secondsUntilBreak: settings.break_interval * 60,
-        });
+        breakState.setIntervalMin(settings.break_interval);
       }
     }
   }, [loaded, settings.break_interval]);
@@ -92,6 +91,7 @@ function MainApp() {
 
   useTaskScheduler();
   useBreakTimer();
+  useFocusTracker();
 
   const locale = (settings.language === "tr" ? "tr" : "en") as Locale;
 
@@ -117,6 +117,7 @@ function MainApp() {
         </main>
         {showAddForm && <AddTaskModal />}
         <ReminderPopup />
+        <PreReminderToast />
         <Toaster
           position="bottom-right"
           toastOptions={{

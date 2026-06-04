@@ -1,27 +1,33 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useBreakStore } from "../stores/breakStore";
 
+function checkBreak() {
+  const state = useBreakStore.getState();
+  if (state.paused || state.breakActive) return;
+  if (Date.now() >= state.nextBreakAt) {
+    state.triggerBreak();
+  }
+}
+
 export function useBreakTimer() {
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Countdown interval — ticks every second
   useEffect(() => {
-    intervalRef.current = setInterval(() => {
-      const state = useBreakStore.getState();
+    // backend-tick fires every 30 seconds from the Rust thread — immune to WebKit throttling
+    const unlistenTick = listen("backend-tick", () => checkBreak());
 
-      if (state.paused || state.breakActive) return;
+    // Check immediately when page becomes visible again (catches minimised/hidden window)
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") checkBreak();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
 
-      const until = state.secondsUntilBreak - 1;
-      if (until <= 0) {
-        state.triggerBreak();
-      } else {
-        state.setSecondsUntilBreak(until);
-      }
-    }, 1000);
+    // Fallback 10-second JS interval for on-screen countdown display updates
+    const uiInterval = setInterval(checkBreak, 10_000);
 
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      unlistenTick.then((fn) => fn());
+      document.removeEventListener("visibilitychange", handleVisibility);
+      clearInterval(uiInterval);
     };
   }, []);
 

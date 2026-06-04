@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Task } from "../types/task";
 import type { BreakStats } from "../types/breaks";
-import type { AppSettings, TaskStats } from "../types/settings";
+import type { AppSettings, TaskStats, FocusHeatmapEntry, WeeklyFocusEntry } from "../types/settings";
 
 export async function createTask(task: Task): Promise<void> {
   return invoke("create_task", { task });
@@ -65,4 +65,16 @@ export async function showBreakOverlay(): Promise<void> {
 
 export async function closeBreakOverlay(): Promise<void> {
   return invoke("close_break_overlay");
+}
+
+export async function recordFocusTime(date: string, hour: number, minutes: number): Promise<void> {
+  return invoke("record_focus_time", { date, hour, minutes });
+}
+
+export async function getFocusHeatmap(days: number): Promise<FocusHeatmapEntry[]> {
+  return invoke("get_focus_heatmap", { days });
+}
+
+export async function getWeeklyFocus(): Promise<WeeklyFocusEntry[]> {
+  return invoke("get_weekly_focus");
 }

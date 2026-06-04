@@ -1,6 +1,6 @@
 use rusqlite::{Connection, params};
 use std::sync::Mutex;
-use crate::models::{Task, BreakStats, AppSettings, TaskStats};
+use crate::models::{Task, BreakStats, AppSettings, TaskStats, FocusHeatmapEntry, WeeklyFocusEntry};
 
 pub struct Database {
     conn: Mutex<Connection>,
@@ -51,6 +51,16 @@ impl Database {
             "ALTER TABLE settings ADD COLUMN language TEXT NOT NULL DEFAULT 'en'",
             [],
         ).ok();
+
+        // Focus sessions table for analytics
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS focus_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT NOT NULL,
+                hour INTEGER NOT NULL,
+                focus_minutes REAL NOT NULL DEFAULT 0.0
+            );"
+        ).map_err(|e| e.to_string())?;
 
         Ok(Self { conn: Mutex::new(conn) })
     }
@@ -250,5 +260,70 @@ impl Database {
             completed_tasks: completed,
             pending_tasks: total - completed,
         })
+    }
+
+    // Accumulate focus minutes for a given date+hour slot
+    pub fn record_focus_time(&self, date: &str, hour: i64, minutes: f64) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        // Upsert: if row exists add to it, otherwise insert
+        conn.execute(
+            "INSERT INTO focus_sessions (date, hour, focus_minutes) VALUES (?1, ?2, ?3)
+             ON CONFLICT DO NOTHING",
+            params![date, hour, 0.0_f64],
+        ).map_err(|e| e.to_string())?;
+        conn.execute(
+            "UPDATE focus_sessions SET focus_minutes = focus_minutes + ?1
+             WHERE date = ?2 AND hour = ?3",
+            params![minutes, date, hour],
+        ).map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    // Return heatmap data: each row is a (date, hour, focus_minutes) entry
+    pub fn get_focus_heatmap(&self, days: i64) -> Result<Vec<FocusHeatmapEntry>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn.prepare(
+            "SELECT date, hour, focus_minutes FROM focus_sessions
+             WHERE date >= date('now', ?1)
+             ORDER BY date ASC, hour ASC"
+        ).map_err(|e| e.to_string())?;
+
+        let offset = format!("-{} days", days - 1);
+        let rows = stmt.query_map([&offset], |row| {
+            Ok(FocusHeatmapEntry {
+                date: row.get(0)?,
+                hour: row.get(1)?,
+                focus_minutes: row.get(2)?,
+            })
+        }).map_err(|e| e.to_string())?;
+
+        let mut result = Vec::new();
+        for row in rows {
+            result.push(row.map_err(|e| e.to_string())?);
+        }
+        Ok(result)
+    }
+
+    // Return total focus minutes per day for the last 7 days
+    pub fn get_weekly_focus(&self) -> Result<Vec<WeeklyFocusEntry>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn.prepare(
+            "SELECT date, SUM(focus_minutes) as total FROM focus_sessions
+             WHERE date >= date('now', '-6 days')
+             GROUP BY date ORDER BY date ASC"
+        ).map_err(|e| e.to_string())?;
+
+        let rows = stmt.query_map([], |row| {
+            Ok(WeeklyFocusEntry {
+                date: row.get(0)?,
+                total_focus_minutes: row.get(1)?,
+            })
+        }).map_err(|e| e.to_string())?;
+
+        let mut result = Vec::new();
+        for row in rows {
+            result.push(row.map_err(|e| e.to_string())?);
+        }
+        Ok(result)
     }
 }

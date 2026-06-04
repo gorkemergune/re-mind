@@ -125,8 +125,23 @@ export const tr: TranslationDictionary = {
   widget_noUpcoming: "Yaklaşan görev yok",
   widget_breakIn: "Molaya",
 
-  // Scheduler
+  // Scheduler / notifications
   notification_scheduledNow: "Şimdi planlandı",
+  notification_startsIn: "Başlıyor",
+  notification_upcomingTask: "Yaklaşan Görev",
+
+  // StatsView analytics
+  stats_focus: "Odak",
+  stats_focusHeatmap: "Odak Isı Haritası",
+  stats_totalFocusTime: "Toplam Odak Süresi",
+  stats_weeklyFocus: "Haftalık Odak",
+  stats_insights: "Öngörüler",
+  stats_noFocusData: "Henüz odak verisi yok. Çalışırken uygulamayı açık tutun.",
+  stats_hours: "s",
+  stats_mins: "d",
+  stats_daily: "Günlük",
+  stats_weekly: "Haftalık",
+  stats_heatmapHint: "Koyu = daha fazla odak süresi",
 
   // ConfirmDialog
   confirm_deleteTask: "Görevi Sil?",

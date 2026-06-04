@@ -125,8 +125,23 @@ export const en: TranslationDictionary = {
   widget_noUpcoming: "No upcoming tasks",
   widget_breakIn: "Break in",
 
-  // Scheduler
+  // Scheduler / notifications
   notification_scheduledNow: "Scheduled for now",
+  notification_startsIn: "Starts in",
+  notification_upcomingTask: "Upcoming Task",
+
+  // StatsView analytics
+  stats_focus: "Focus",
+  stats_focusHeatmap: "Focus Heatmap",
+  stats_totalFocusTime: "Total Focus Time",
+  stats_weeklyFocus: "Weekly Focus",
+  stats_insights: "Insights",
+  stats_noFocusData: "No focus data yet. Keep the app open while you work.",
+  stats_hours: "h",
+  stats_mins: "m",
+  stats_daily: "Daily",
+  stats_weekly: "Weekly",
+  stats_heatmapHint: "Darker = more focus time",
 
   // ConfirmDialog
   confirm_deleteTask: "Delete Task?",
